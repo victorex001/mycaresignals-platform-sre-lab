@@ -66,6 +66,18 @@ The repository is source-visible, not open-source; see [`LICENSE`](LICENSE).
 Local development for both applications is documented in
 [`apps/mycaresignals/config/local/README.md`](apps/mycaresignals/config/local/README.md).
 
+## CI/CD platform
+
+GitHub Actions is the only supported CI/CD system in this repository:
+
+- `.github/workflows/ci.yml` — tests, builds and validation.
+- `.github/workflows/sre-lab-infrastructure.yml` — manually dispatched, approval-gated lab Terraform operations.
+- `.github/workflows/sre-lab-exercise.yml` — manually dispatched, approval-gated lab exercises.
+
+Legacy GitLab pipelines and runner helpers are preserved, disabled, in
+[`archive/gitlab/`](archive/gitlab/README.md). No GitLab runner is required.
+These workflows do not deploy to production or demo.
+
 ## Previous repositories
 
 The following GitLab repositories and their local working copies remain

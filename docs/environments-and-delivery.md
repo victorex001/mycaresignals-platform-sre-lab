@@ -35,42 +35,23 @@ and the dedicated SRE lab cover migration and reliability validation.
 
 ## Delivery workflow
 
-```text
-LOCAL
-develop and test
-   |
-   v
-FEATURE/FIX BRANCH (where useful)
-small, reviewable change
-   |
-   v
-GITLAB CI
-test, typecheck, build, and validate
-   |
-   v
-MAIN
-validated source of truth
-   |
-   v
-DEMO
-controlled deployment and verification using synthetic data
-   |
-   v
-PROD
-controlled, explicitly approved promotion
-```
+The supported path is local development and testing, a feature/fix branch,
+a pull request with GitHub Actions CI, protected `main`, then a manually
+requested and human-approved `sre-lab` workflow.
 
-The same application source is promoted through demo and production. The
-current GitLab configuration deliberately provides validation and build jobs
-only. It applies migrations only to disposable CI databases; it does not
-deploy applications, migrate live databases, apply or destroy Terraform,
-upload frontend artifacts to AWS, or invalidate CloudFront.
+GitHub Actions in `.github/workflows/` is the sole active CI/CD system. CI runs
+Go tests, frontend builds, repository-safety checks, migration/observability
+contract checks, lab Terraform validation and k6 script inspection. Contract
+checks inspect configuration; they do not execute database migrations.
 
-For this single-maintainer project, a feature or fix branch is recommended when
-it improves reviewability or rollback, but unnecessary process is not required.
-GitLab CI must pass before a merge into `main`. Deployments to demo and
-production remain separate, controlled actions; a successful validation
-pipeline does not deploy anything.
+Infrastructure and exercise workflows require manual dispatch and the protected
+`sre-lab` environment. AWS authentication uses short-lived OIDC credentials once
+bootstrapped. Successful CI alone does not deploy anything. This repository's
+GitHub workflows do not deploy to demo or production.
+
+Legacy GitLab pipelines and runner helpers are retained only in
+[`../archive/gitlab/`](../archive/gitlab/README.md), with `.disabled` suffixes.
+Original GitLab repositories and existing AWS resources remain untouched.
 
 ## Infrastructure layout
 
