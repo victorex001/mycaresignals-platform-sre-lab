@@ -1,6 +1,6 @@
 # Weekly SRE orientation
 
-Use current GitLab, AWS, incident, change, and agreed communication sources.
+Use current GitHub Actions, pull request, AWS, incident, change, and agreed communication sources.
 Separate confirmed evidence from inference and omit unrelated personal content.
 
 ## Attention first

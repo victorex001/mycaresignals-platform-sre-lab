@@ -88,4 +88,4 @@ jobs:
             -e DEV_JWT_HMAC_SECRET=0000000000000000000000000000000000000000000000000000000000000000 \
             -e PROFILE=smoke \
             -v "$PWD/load-testing/mycaresignals-1m/k6:/scripts:ro" \
-            grafana/k6:0.54.0 inspect /scripts/scenario.js
+            grafana/k6:0.54.0 inspect --include-system-env-vars /scripts/scenario.js
