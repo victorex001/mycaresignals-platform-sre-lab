@@ -34,7 +34,7 @@ jobs:
       SRE_LAB_LOAD_NODE_GROUP: load-generator-spot
       SRE_LAB_APP_NODE_GROUP: application-on-demand
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}

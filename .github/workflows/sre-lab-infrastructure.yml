@@ -44,7 +44,7 @@ jobs:
       TF_VAR_budget_alert_email: ${{ vars.SRE_LAB_ALERT_EMAIL }}
       TF_VAR_expires_after: ${{ vars.SRE_LAB_EXPIRES_AFTER }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
