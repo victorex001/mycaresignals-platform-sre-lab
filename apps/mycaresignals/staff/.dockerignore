@@ -1,0 +1,34 @@
+# Git files
+.git
+.gitignore
+
+# Frontend is built separately by GitLab, not needed for Go API image
+frontend
+
+# Node/build output
+node_modules
+dist
+build
+
+# Local env/secrets
+.env
+.env.*
+*.env
+
+# Logs and local files
+*.log
+.DS_Store
+
+# CI/config files not needed inside image
+.gitlab-ci.yml
+README.md
+
+# Terraform/infra files if any
+.terraform
+*.tfstate
+*.tfstate.*
+
+# Docker files not needed inside final API build context
+Dockerfile.migrate
+docker-compose.yml
+docker-compose.yaml

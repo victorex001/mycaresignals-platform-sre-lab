@@ -1,0 +1,16 @@
+{
+  "name": "@mycaresignals/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types/http": {
+      "types": "./types/http.ts",
+      "default": "./types/http.ts"
+    },
+    "./utilities/dateTime": {
+      "types": "./utilities/dateTime.ts",
+      "default": "./utilities/dateTime.ts"
+    }
+  }
+}

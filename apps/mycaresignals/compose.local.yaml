@@ -1,0 +1,180 @@
+name: mycaresignals-local
+
+services:
+  staff-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${STAFF_DB_USER:?Set STAFF_DB_USER in .env.local}
+      POSTGRES_PASSWORD: ${STAFF_DB_PASSWORD:?Set STAFF_DB_PASSWORD in .env.local}
+      POSTGRES_DB: ${STAFF_DB_NAME:?Set STAFF_DB_NAME in .env.local}
+    ports:
+      - "127.0.0.1:${STAFF_DB_PORT:-5433}:5432"
+    volumes:
+      - staff-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - staff-data
+
+  staff-migrate:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      staff-db:
+        condition: service_healthy
+    volumes:
+      - ./staff/internal/migrations:/migrations:ro
+    command:
+      - -path
+      - /migrations
+      - -database
+      - postgres://${STAFF_DB_USER}:${STAFF_DB_PASSWORD}@staff-db:5432/${STAFF_DB_NAME}?sslmode=disable
+      - up
+    restart: "no"
+    networks:
+      - staff-data
+
+  staff-api:
+    build:
+      context: ./staff
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_DSN: postgres://${STAFF_DB_USER}:${STAFF_DB_PASSWORD}@staff-db:5432/${STAFF_DB_NAME}?sslmode=disable
+      PORT: "8081"
+      APP_ENV: development
+      AUTH_MODE: development
+      ENABLE_DEV_AUTH: "true"
+      ALLOW_CONTAINER_DEV_AUTH: "true"
+      DEV_JWT_ISSUER: https://local.invalid/mycaresignals
+      DEV_JWT_AUDIENCE: mycaresignals-local
+      DEV_JWT_HMAC_SECRET: ${STAFF_DEV_JWT_HMAC_SECRET:?Set STAFF_DEV_JWT_HMAC_SECRET in .env.local}
+      ALLOW_DEMO_SEED: "false"
+      FEEDBACK_INTAKE_SERVICE_TOKEN: ${FEEDBACK_INTAKE_SERVICE_TOKEN:?Set FEEDBACK_INTAKE_SERVICE_TOKEN in .env.local}
+      AWS_REGION: eu-west-2
+      AWS_EC2_METADATA_DISABLED: "true"
+    depends_on:
+      staff-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${STAFF_API_PORT:-8081}:8081"
+    networks:
+      - staff-data
+      - intake
+      - staff-app
+
+  staff-web:
+    image: node:22-bookworm
+    working_dir: /workspace/apps/mycaresignals/staff/frontend
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5174"]
+    environment:
+      VITE_AUTH_MODE: development
+      VITE_DEV_API_TARGET: http://staff-api:8081
+    depends_on:
+      - staff-api
+    ports:
+      - "127.0.0.1:${STAFF_WEB_PORT:-5174}:5174"
+    volumes:
+      - ./staff/frontend:/workspace/apps/mycaresignals/staff/frontend:ro
+      - ./shared:/workspace/apps/mycaresignals/shared:ro
+      - staff-frontend-modules:/workspace/apps/mycaresignals/staff/frontend/node_modules
+    networks:
+      - staff-app
+
+  feedback-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${FEEDBACK_DB_USER:?Set FEEDBACK_DB_USER in .env.local}
+      POSTGRES_PASSWORD: ${FEEDBACK_DB_PASSWORD:?Set FEEDBACK_DB_PASSWORD in .env.local}
+      POSTGRES_DB: ${FEEDBACK_DB_NAME:?Set FEEDBACK_DB_NAME in .env.local}
+    ports:
+      - "127.0.0.1:${FEEDBACK_DB_PORT:-5434}:5432"
+    volumes:
+      - feedback-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - feedback-data
+
+  feedback-migrate:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      feedback-db:
+        condition: service_healthy
+    volumes:
+      - ./feedback/internal/migrations:/migrations:ro
+    command:
+      - -path
+      - /migrations
+      - -database
+      - postgres://${FEEDBACK_DB_USER}:${FEEDBACK_DB_PASSWORD}@feedback-db:5432/${FEEDBACK_DB_NAME}?sslmode=disable
+      - up
+    restart: "no"
+    networks:
+      - feedback-data
+
+  feedback-api:
+    build:
+      context: ./feedback
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://${FEEDBACK_DB_USER}:${FEEDBACK_DB_PASSWORD}@feedback-db:5432/${FEEDBACK_DB_NAME}?sslmode=disable
+      SECRET_KEY: ${FEEDBACK_SECRET_KEY:?Set FEEDBACK_SECRET_KEY in .env.local}
+      ADMIN_TOKEN: ${FEEDBACK_ADMIN_TOKEN:?Set FEEDBACK_ADMIN_TOKEN in .env.local}
+      ALLOWED_ORIGINS: http://visitorfeedback.localhost:${FEEDBACK_WEB_PORT:-5173},http://childvoice.localhost:${FEEDBACK_WEB_PORT:-5173}
+      RATE_LIMIT_RPS: "20"
+      RATE_LIMIT_BURST: "40"
+      SMTP_HOST: ""
+      NOTIFY_TO: ""
+      MANAGER_REVIEW_URL: http://visitorfeedback.localhost:${FEEDBACK_WEB_PORT:-5173}/admin/feedback
+      THERAPEUTIC_INTAKE_URL: http://staff-api:8081
+      THERAPEUTIC_INTAKE_TOKEN: ${FEEDBACK_INTAKE_SERVICE_TOKEN:?Set FEEDBACK_INTAKE_SERVICE_TOKEN in .env.local}
+    depends_on:
+      feedback-migrate:
+        condition: service_completed_successfully
+      staff-api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${FEEDBACK_API_PORT:-8080}:8080"
+    networks:
+      - feedback-data
+      - intake
+      - feedback-app
+
+  feedback-web:
+    image: node:22-bookworm
+    working_dir: /workspace/apps/mycaresignals/feedback/frontend
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      VITE_DEV_API_TARGET: http://feedback-api:8080
+    depends_on:
+      - feedback-api
+    ports:
+      - "127.0.0.1:${FEEDBACK_WEB_PORT:-5173}:5173"
+    volumes:
+      - ./feedback/frontend:/workspace/apps/mycaresignals/feedback/frontend:ro
+      - ./shared:/workspace/apps/mycaresignals/shared:ro
+      - feedback-frontend-modules:/workspace/apps/mycaresignals/feedback/frontend/node_modules
+    networks:
+      - feedback-app
+
+volumes:
+  staff-postgres:
+  feedback-postgres:
+  staff-frontend-modules:
+  feedback-frontend-modules:
+
+networks:
+  staff-data:
+  feedback-data:
+  intake:
+    internal: true
+  staff-app:
+  feedback-app:

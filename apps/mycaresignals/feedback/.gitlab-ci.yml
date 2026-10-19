@@ -1,0 +1,52 @@
+qr:test:
+  stage: test
+  image: golang:1.24-bookworm
+  variables:
+    GOCACHE: "$CI_PROJECT_DIR/.cache/go/qr-build"
+    GOMODCACHE: "$CI_PROJECT_DIR/.cache/go/qr-mod"
+  cache:
+    key: "qr-go-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cache/go/qr-build/
+      - .cache/go/qr-mod/
+  before_script:
+    - cd "$CI_PROJECT_DIR/apps/mycaresignals/feedback"
+  script:
+    - go mod download
+    - go mod verify
+    - go test ./...
+
+qr:frontend:
+  stage: test
+  image: node:22-bookworm
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm/qr"
+  cache:
+    key: "qr-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cache/npm/qr/
+  before_script:
+    - cd "$CI_PROJECT_DIR/apps/mycaresignals/feedback/frontend"
+    - npm ci
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - apps/mycaresignals/feedback/frontend/dist/
+    expire_in: 1 day
+
+qr:build:
+  stage: build
+  image: docker:27-cli
+  services:
+    - name: docker:27-dind
+      command: ["--mtu=1460"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  needs:
+    - qr:test
+    - qr:frontend
+  script:
+    - docker build --file apps/mycaresignals/feedback/Dockerfile --tag mycaresignals/qr-feedback:ci apps/mycaresignals/feedback
+    - docker build --file apps/mycaresignals/feedback/Dockerfile.migrate --tag mycaresignals/qr-feedback-migrate:ci apps/mycaresignals/feedback

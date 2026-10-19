@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:15
+    container_name: therapeutic-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in local .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in local .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in local .env}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: therapeutic-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./internal/migrations:/migrations:ro
+    command:
+      [
+        "-path", "/migrations",
+        "-database", "${POSTGRES_DSN:?Set POSTGRES_DSN in local .env}",
+        "up"
+      ]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: therapeutic-api
+    environment:
+      POSTGRES_DSN: ${POSTGRES_DSN:?Set POSTGRES_DSN in local .env}
+      PORT: "8081"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      APP_ENV: ${APP_ENV:-development}
+      AUTH_MODE: ${AUTH_MODE:-development}
+      ENABLE_DEV_AUTH: ${ENABLE_DEV_AUTH:-true}
+      DEV_JWT_ISSUER: ${DEV_JWT_ISSUER:-https://example.invalid/mycaresignals-dev}
+      DEV_JWT_AUDIENCE: ${DEV_JWT_AUDIENCE:-mycaresignals-dev}
+      DEV_JWT_HMAC_SECRET: ${DEV_JWT_HMAC_SECRET:?Set DEV_JWT_HMAC_SECRET in local .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8081:8081"
+    restart: on-failure
+
+volumes:
+  pgdata:

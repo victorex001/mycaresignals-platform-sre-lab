@@ -1,0 +1,184 @@
+name: SRE lab exercise
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Reviewed phase to execute
+        type: choice
+        required: true
+        options: [deploy, seed, smoke, baseline, scale, soak, status, collect-stop, stop, fault-pod, fault-rds]
+        default: smoke
+      confirmation:
+        description: Confirmation text shown in the runbook for this phase
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sre-lab-exercise
+  cancel-in-progress: false
+
+jobs:
+  exercise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: sre-lab
+    env:
+      AWS_REGION: eu-west-2
+      SRE_LAB_ACCOUNT_ID: ${{ vars.SRE_LAB_ACCOUNT_ID }}
+      SRE_LAB_CLUSTER_NAME: mycaresignals-sre-lab-eks
+      SRE_LAB_LOAD_NODE_GROUP: load-generator-spot
+      SRE_LAB_APP_NODE_GROUP: application-on-demand
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-sre-lab-exercise
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+      - name: Install Helm
+        if: inputs.phase == 'deploy'
+        uses: azure/setup-helm@v4
+      - name: Verify phase confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          phase='${{ inputs.phase }}'
+          confirmation='${{ inputs.confirmation }}'
+          case "$phase" in
+            deploy) expected='DEPLOY_SYNTHETIC_LAB' ;;
+            seed) expected='SRE_LAB_SYNTHETIC_ONLY' ;;
+            smoke|baseline|scale) expected='RUN_SYNTHETIC_ONLY' ;;
+            soak) expected='RUN_8_HOUR_10K_SOAK' ;;
+            status) expected='CHECK_SRE_LAB_LOAD' ;;
+            collect-stop) expected='COLLECT_AND_STOP_SRE_LAB_LOAD' ;;
+            stop) expected='STOP_SRE_LAB_LOAD' ;;
+            fault-pod) expected='KILL_ONE_API_POD' ;;
+            fault-rds) expected='FAILOVER_SYNTHETIC_RDS' ;;
+            *) exit 64 ;;
+          esac
+          if [[ "$confirmation" != "$expected" ]]; then
+            echo "Expected confirmation: ${expected}" >&2
+            exit 64
+          fi
+          ./scripts/sre-lab/check-account.sh
+      - name: Temporarily authorize this GitHub runner
+        shell: bash
+        run: ./scripts/sre-lab/authorize-github-runner.sh
+      - name: Login to ECR
+        if: inputs.phase == 'deploy' || inputs.phase == 'seed' || inputs.phase == 'smoke' || inputs.phase == 'baseline' || inputs.phase == 'scale' || inputs.phase == 'soak'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and publish required images
+        if: inputs.phase != 'stop' && inputs.phase != 'fault-pod' && inputs.phase != 'fault-rds'
+        shell: bash
+        env:
+          PHASE: ${{ inputs.phase }}
+        run: |
+          set -euo pipefail
+          image_tag="${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
+          repository_prefix="${{ steps.ecr.outputs.registry }}/mycaresignals-sre-lab"
+
+          push_and_resolve() {
+            local name="$1"
+            local dockerfile="$2"
+            local context="$3"
+            local variable_name="$4"
+            local image="${repository_prefix}/${name}:${image_tag}"
+            docker build --file "$dockerfile" --tag "$image" "$context"
+            docker push "$image"
+            local digest
+            digest="$(aws ecr describe-images \
+              --repository-name "mycaresignals-sre-lab/${name}" \
+              --image-ids "imageTag=${image_tag}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text)"
+            echo "${variable_name}=${repository_prefix}/${name}@${digest}" >>"$GITHUB_ENV"
+          }
+
+          case "$PHASE" in
+            deploy)
+              push_and_resolve teapi apps/mycaresignals/staff/Dockerfile apps/mycaresignals/staff TEAPI_IMAGE_URI
+              push_and_resolve teapi-migrate apps/mycaresignals/staff/Dockerfile.migrate apps/mycaresignals/staff MIGRATOR_IMAGE_URI
+              ;;
+            seed)
+              push_and_resolve seed-tools load-testing/mycaresignals-1m/Dockerfile.seed load-testing/mycaresignals-1m SEED_IMAGE_URI
+              ;;
+            smoke|baseline|scale|soak)
+              push_and_resolve loadgen load-testing/mycaresignals-1m/Dockerfile load-testing/mycaresignals-1m LOADGEN_IMAGE_URI
+              ;;
+          esac
+      - name: Discover lab outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_secret="$(aws secretsmanager describe-secret \
+            --secret-id mycaresignals-sre-lab/runtime \
+            --query ARN --output text)"
+          results_bucket="$(aws s3api list-buckets \
+            --query "Buckets[?starts_with(Name, 'mycaresignals-sre-lab-results-')].Name | [0]" \
+            --output text)"
+          echo "SRE_LAB_RUNTIME_SECRET_ARN=${runtime_secret}" >>"$GITHUB_ENV"
+          if [[ "$results_bucket" != 'None' ]]; then
+            echo "SRE_LAB_RESULTS_BUCKET=${results_bucket}" >>"$GITHUB_ENV"
+          fi
+      - name: Execute selected phase
+        shell: bash
+        env:
+          PHASE: ${{ inputs.phase }}
+        run: |
+          set -euo pipefail
+          case "$PHASE" in
+            deploy)
+              ./scripts/sre-lab/deploy-platform.sh
+              ;;
+            seed)
+              export CONFIRM_SRE_LAB_SEED=SRE_LAB_SYNTHETIC_ONLY
+              ./scripts/sre-lab/seed-1m.sh
+              ;;
+            smoke|baseline|scale)
+              export CONFIRM_SRE_LAB_RUN=RUN_SYNTHETIC_ONLY
+              ./scripts/sre-lab/run-load.sh "$PHASE"
+              ;;
+            soak)
+              export CONFIRM_SRE_LAB_RUN=RUN_SYNTHETIC_ONLY
+              export CONFIRM_SRE_LAB_SOAK=RUN_8_HOUR_10K_SOAK
+              export SRE_LAB_WAIT_FOR_LOAD=false
+              ./scripts/sre-lab/run-load.sh soak
+              ;;
+            status)
+              ./scripts/sre-lab/load-status.sh
+              ;;
+            collect-stop)
+              export CONFIRM_SRE_LAB_COLLECT=COLLECT_AND_STOP_SRE_LAB_LOAD
+              ./scripts/sre-lab/collect-load.sh
+              ;;
+            stop)
+              export CONFIRM_SRE_LAB_STOP=STOP_SRE_LAB_LOAD
+              ./scripts/sre-lab/stop-load.sh
+              ;;
+            fault-pod)
+              export CONFIRM_SRE_LAB_FAULT=KILL_ONE_API_POD
+              ./scripts/sre-lab/scenario-kill-api-pod.sh
+              ;;
+            fault-rds)
+              export CONFIRM_SRE_LAB_FAULT=FAILOVER_SYNTHETIC_RDS
+              ./scripts/sre-lab/scenario-rds-failover.sh
+              ;;
+          esac
+      - name: Scale load capacity down
+        if: always() && (inputs.phase == 'smoke' || inputs.phase == 'baseline' || inputs.phase == 'scale')
+        shell: bash
+        run: |
+          export CONFIRM_SRE_LAB_STOP=STOP_SRE_LAB_LOAD
+          ./scripts/sre-lab/stop-load.sh
+      - name: Restore restricted EKS endpoint access
+        if: always()
+        shell: bash
+        run: ./scripts/sre-lab/restore-eks-access.sh

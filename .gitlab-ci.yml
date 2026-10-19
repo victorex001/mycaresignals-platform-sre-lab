@@ -1,0 +1,91 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+stages:
+  - test
+  - build
+  - validate
+
+default:
+  tags:
+    - saas-linux-small-amd64
+  interruptible: true
+
+variables:
+  PRODUCT_NAME: "mycaresignals"
+  REPOSITORY_NAME: "mycaresignals-platform"
+
+include:
+  - local: "/apps/mycaresignals/staff/.gitlab-ci.yml"
+  - local: "/apps/mycaresignals/feedback/.gitlab-ci.yml"
+  - local: "/infrastructure/.gitlab-ci.yml"
+
+demo:safety:
+  stage: test
+  image: bash:5.2
+  script:
+    - bash -n scripts/demo/lib/guards.sh scripts/demo/lib/status.sh scripts/demo/lib/lifecycle.sh scripts/demo/verify.sh scripts/demo/start.sh scripts/demo/stop.sh scripts/demo/tests/guards_test.sh scripts/demo/tests/lifecycle_test.sh
+    - ./scripts/demo/tests/guards_test.sh
+    - ./scripts/demo/tests/lifecycle_test.sh
+    - |
+      if grep -En '(AKIA|ASIA)[A-Z0-9]{16}|aws_secret_access_key[[:space:]]*=|aws_access_key_id[[:space:]]*=|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|postgres(ql)?://[^[:space:]]+:[^[:space:]@]+@' scripts/demo/README.md scripts/demo/verify.sh scripts/demo/lib/*.sh scripts/demo/tests/*.sh docs/environments/demo.md; then
+        echo "Potential credential material detected in demo lifecycle files." >&2
+        exit 1
+      fi
+    - |
+      if grep -En '(delete-|deregister-|modify-db-instance|terraform apply|terraform destroy)' scripts/demo/verify.sh scripts/demo/start.sh scripts/demo/stop.sh scripts/demo/lib/*.sh; then
+        echo "Forbidden destructive command detected in demo lifecycle scripts." >&2
+        exit 1
+      fi
+
+repository:safety:
+  stage: test
+  image: bash:5.2
+  script:
+    - ./scripts/ci/check_repository_safety.sh
+
+sre:contracts:
+  stage: test
+  image: bash:5.2
+  script:
+    - ./scripts/ci/check_migration_contract.sh
+    - ./scripts/ci/check_observability_contract.sh
+
+migration:smoke:staff:
+  stage: test
+  image:
+    name: migrate/migrate:v4.17.1
+    entrypoint: [""]
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: staff_migration_test
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    DATABASE_URL: "postgres://postgres:postgres@postgres:5432/staff_migration_test?sslmode=disable"
+  script:
+    - until nc -z postgres 5432; do sleep 1; done
+    - migrate -path apps/mycaresignals/staff/internal/migrations -database "$DATABASE_URL" up
+    - test "$(migrate -path apps/mycaresignals/staff/internal/migrations -database "$DATABASE_URL" version)" = "32"
+
+migration:smoke:feedback:
+  stage: test
+  image:
+    name: migrate/migrate:v4.17.1
+    entrypoint: [""]
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: feedback_migration_test
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    DATABASE_URL: "postgres://postgres:postgres@postgres:5432/feedback_migration_test?sslmode=disable"
+  script:
+    - until nc -z postgres 5432; do sleep 1; done
+    - migrate -path apps/mycaresignals/feedback/internal/migrations -database "$DATABASE_URL" up
+    - test "$(migrate -path apps/mycaresignals/feedback/internal/migrations -database "$DATABASE_URL" version)" = "19"

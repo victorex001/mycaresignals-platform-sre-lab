@@ -1,0 +1,4 @@
+aws_account_id = "123456789012"
+expires_after  = "2026-12-31"
+github_repository = "victorex001/mycaresignals-platform-sre-lab"
+github_environment = "sre-lab"

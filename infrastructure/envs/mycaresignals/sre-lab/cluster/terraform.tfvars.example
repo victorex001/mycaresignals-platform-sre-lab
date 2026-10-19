@@ -1,0 +1,11 @@
+aws_account_id        = "123456789012"
+foundation_state_bucket = "replace-with-sre-lab-state-bucket"
+terraform_lock_table  = "replace-with-sre-lab-lock-table"
+operator_cidrs        = ["203.0.113.10/32"]
+alert_email           = "sre-lab-alerts@example.invalid"
+expires_after         = "2026-12-31"
+
+# The load node group starts at zero and is scaled only by the guarded run script.
+load_max_nodes        = 20
+rds_multi_az          = true
+rds_instance_class    = "db.m7g.large"

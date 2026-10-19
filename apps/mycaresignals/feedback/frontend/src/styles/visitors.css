@@ -1,0 +1,55 @@
+/* ---------- Visitor feedback card (light) ---------- */
+
+.vf-card {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  background: var(--card-bg);
+  border-radius: 24px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-soft);
+  padding: 28px 28px 24px;
+}
+
+@media (max-width: 640px) {
+  .vf-card {
+    padding: 20px 14px 18px;
+    border-radius: 18px;
+  }
+}
+
+.vf-header {
+  margin-bottom: 20px;
+}
+
+.vf-title {
+  margin: 0 0 4px;
+  font-size: 1.9rem;
+  font-weight: 700;
+}
+
+.vf-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.vf-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Simple 2-column grid for name/email (stacks on small screens) */
+
+.vf-grid-2 {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .vf-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

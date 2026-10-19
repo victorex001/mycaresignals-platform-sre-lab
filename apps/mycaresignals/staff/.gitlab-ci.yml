@@ -1,0 +1,52 @@
+te:test:
+  stage: test
+  image: golang:1.25-bookworm
+  variables:
+    GOCACHE: "$CI_PROJECT_DIR/.cache/go/te-build"
+    GOMODCACHE: "$CI_PROJECT_DIR/.cache/go/te-mod"
+  cache:
+    key: "te-go-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cache/go/te-build/
+      - .cache/go/te-mod/
+  before_script:
+    - cd "$CI_PROJECT_DIR/apps/mycaresignals/staff"
+  script:
+    - go mod download
+    - go mod verify
+    - go test ./...
+
+te:frontend:
+  stage: test
+  image: node:22-bookworm
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm/te"
+  cache:
+    key: "te-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cache/npm/te/
+  before_script:
+    - cd "$CI_PROJECT_DIR/apps/mycaresignals/staff/frontend"
+    - npm ci
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - apps/mycaresignals/staff/frontend/dist/
+    expire_in: 1 day
+
+te:build:
+  stage: build
+  image: docker:27-cli
+  services:
+    - name: docker:27-dind
+      command: ["--mtu=1460"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  needs:
+    - te:test
+    - te:frontend
+  script:
+    - docker build --file apps/mycaresignals/staff/Dockerfile --tag mycaresignals/therapeutic-engine:ci apps/mycaresignals/staff
+    - docker build --file apps/mycaresignals/staff/Dockerfile.migrate --tag mycaresignals/therapeutic-engine-migrate:ci apps/mycaresignals/staff

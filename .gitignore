@@ -1,0 +1,31 @@
+.DS_Store
+**/.DS_Store
+
+# Repository-local temporary files
+.tmp/
+*.log
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+
+# Local myCareSignals runtime configuration (example remains tracked)
+apps/mycaresignals/.env.local
+apps/mycaresignals/.local/
+
+# Local Go build outputs (source directories use these names)
+apps/mycaresignals/staff/main
+apps/mycaresignals/feedback/main
+apps/mycaresignals/feedback/feedback.csv
+apps/mycaresignals/feedback/feedback_test.csv
+
+# Dependency, build, test and coverage output
+**/node_modules/
+**/dist/
+**/coverage/
+*.out
+
+# Local archives and generated evidence
+*.zip
+load-results/

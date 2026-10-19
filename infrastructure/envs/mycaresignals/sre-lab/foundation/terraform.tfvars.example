@@ -1,0 +1,6 @@
+aws_account_id       = "123456789012"
+budget_alert_email   = "sre-lab-alerts@example.invalid"
+expires_after        = "2026-12-31"
+monthly_budget_usd   = 200
+enable_nat_gateway   = true
+enable_vpc_flow_logs = true

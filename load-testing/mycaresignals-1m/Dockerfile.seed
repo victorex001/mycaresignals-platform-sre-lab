@@ -1,0 +1,6 @@
+FROM postgres:16-alpine
+
+COPY seed/seed.sql /seed/seed.sql
+COPY seed/verify.sql /seed/verify.sql
+
+ENTRYPOINT ["psql"]

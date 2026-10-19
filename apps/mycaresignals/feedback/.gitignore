@@ -1,0 +1,14 @@
+## build artifacts
+qr-feedback-api
+*.out
+
+# local env files
+.env
+.env.*
+!.env.example
+env.prod
+vendor/
+.idea/
+.vscode/
+.DS_Store
+**/.DS_Store

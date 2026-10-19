@@ -1,0 +1,7 @@
+# Victory must review changes to deployment, security and production boundaries.
+/.github/workflows/ @victorex001
+/infrastructure/ @victorex001
+/scripts/sre-lab/ @victorex001
+/load-testing/ @victorex001
+/apps/mycaresignals/staff/internal/security/ @victorex001
+/apps/mycaresignals/staff/internal/middleware/ @victorex001

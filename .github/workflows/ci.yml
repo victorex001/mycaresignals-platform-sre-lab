@@ -1,0 +1,91 @@
+name: SRE lab CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell and repository safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          find scripts/sre-lab scripts/ci -type f -name '*.sh' -print0 | xargs -0 bash -n
+          ./scripts/sre-lab/tests/check_account_test.sh
+          ./scripts/ci/check_repository_safety.sh
+          ./scripts/ci/check_migration_contract.sh
+          ./scripts/ci/check_observability_contract.sh
+
+  application-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [staff, feedback]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/mycaresignals/${{ matrix.service }}/go.mod
+          cache-dependency-path: apps/mycaresignals/${{ matrix.service }}/go.sum
+      - name: Test ${{ matrix.service }} service
+        working-directory: apps/mycaresignals/${{ matrix.service }}
+        run: go test ./...
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [staff, feedback]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mycaresignals/${{ matrix.service }}/frontend/package-lock.json
+      - name: Build ${{ matrix.service }} frontend
+        working-directory: apps/mycaresignals/${{ matrix.service }}/frontend
+        run: |
+          npm ci
+          npm run build
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - name: Format and validate isolated lab stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive infrastructure/envs/mycaresignals/sre-lab
+          for stack in bootstrap foundation cluster; do
+            terraform -chdir="infrastructure/envs/mycaresignals/sre-lab/${stack}" init -backend=false -input=false
+            terraform -chdir="infrastructure/envs/mycaresignals/sre-lab/${stack}" validate
+          done
+
+  load-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect k6 scenario
+        run: |
+          docker run --rm \
+            -e BASE_URL=http://example.invalid \
+            -e DEV_JWT_HMAC_SECRET=0000000000000000000000000000000000000000000000000000000000000000 \
+            -e PROFILE=smoke \
+            -v "$PWD/load-testing/mycaresignals-1m/k6:/scripts:ro" \
+            grafana/k6:0.54.0 inspect /scripts/scenario.js

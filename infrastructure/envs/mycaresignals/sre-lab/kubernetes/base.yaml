@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mycaresignals-sre-lab
+  labels:
+    environment: sre-lab
+    data-classification: synthetic-only
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mycaresignals-load
+  labels:
+    environment: sre-lab
+    data-classification: synthetic-only
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: teapi-config
+  namespace: mycaresignals-sre-lab
+data:
+  APP_ENV: development
+  AUTH_MODE: development
+  ENABLE_DEV_AUTH: "true"
+  ALLOW_CONTAINER_DEV_AUTH: "false"
+  DEV_JWT_ISSUER: https://sre-lab.invalid/mycaresignals
+  DEV_JWT_AUDIENCE: mycaresignals-sre-lab
+  ALLOW_DEMO_SEED: "false"
+  PORT: "8081"
+  DB_MAX_OPEN_CONNS: "30"
+  DB_MAX_IDLE_CONNS: "15"
+  DB_CONN_MAX_LIFETIME: 15m
+  DB_CONN_MAX_IDLE_TIME: 2m
+  AWS_REGION: eu-west-2
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: teapi-default-deny-ingress
+  namespace: mycaresignals-sre-lab
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: teapi-allow-load-and-same-namespace
+  namespace: mycaresignals-sre-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: teapi
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mycaresignals-load
+      ports:
+        - protocol: TCP
+          port: 8081
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: load-default-deny
+  namespace: mycaresignals-load
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: load-allow-dns-and-teapi
+  namespace: mycaresignals-load
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mycaresignals-sre-lab
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: teapi
+      ports:
+        - protocol: TCP
+          port: 8081

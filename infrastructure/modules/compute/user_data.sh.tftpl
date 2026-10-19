@@ -1,0 +1,45 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "Booting app with image ${image}" > /var/log/user_data.log
+echo "DB host: ${db_host}" >> /var/log/user_data.log
+echo "DB port: ${db_port}" >> /var/log/user_data.log
+echo "App port: ${app_port}" >> /var/log/user_data.log
+echo "AWS region: ${aws_region}" >> /var/log/user_data.log
+
+apt-get update -y
+apt-get install -y docker.io awscli
+systemctl enable --now docker
+
+AWS_REGION="${aws_region}"
+IMAGE="${image}"
+ECR_REGISTRY="$(echo "$IMAGE" | cut -d/ -f1)"
+
+aws ecr get-login-password --region "$AWS_REGION" \
+  | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+# ---- Fetch POSTGRES_DSN from SSM Parameter Store (SecureString) ----
+PARAM_NAME="/therapeutic-engine/POSTGRES_DSN"
+POSTGRES_DSN="$(aws ssm get-parameter \
+  --region "$AWS_REGION" \
+  --with-decryption \
+  --name "$PARAM_NAME" \
+  --query 'Parameter.Value' \
+  --output text)"
+
+# Optional: write it to a root-only env file
+install -d -m 0700 /etc/therapeutic-engine
+cat >/etc/therapeutic-engine/app.env <<EOF
+POSTGRES_DSN=$POSTGRES_DSN
+EOF
+chmod 600 /etc/therapeutic-engine/app.env
+
+docker pull "$IMAGE"
+docker rm -f app || true
+
+docker run -d --restart=always --name app \
+  --env-file /etc/therapeutic-engine/app.env \
+  -p ${app_port}:${app_port} \
+  "$IMAGE"
+
+echo "Container started: $IMAGE" >> /var/log/user_data.log

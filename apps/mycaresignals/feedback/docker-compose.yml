@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: qr-feedback-db
+    environment:
+      POSTGRES_USER: ${DB_USER:?set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME}
+    ports:
+      # expose on host; change 5434 -> something free if 5433 already used by therapeutic-db
+      - "${DB_PORT:-5434}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: qr-feedback-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # our Go-style migrations:
+      - ./internal/migrations:/migrations:ro
+    command:
+      [
+        "-path", "/migrations",
+        "-database", "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable",
+        "up"
+      ]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qr-feedback-api
+    environment:
+      PORT: "8080"
+
+      # DSN used by your Go app
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-1}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-5}
+
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      NOTIFY_TO: ${NOTIFY_TO:-}
+      EMAIL_SUBJECT_PREFIX: ${EMAIL_SUBJECT_PREFIX:-"[Feedback]"}
+
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
+      MANAGER_REVIEW_URL: ${MANAGER_REVIEW_URL:-}
+      THERAPEUTIC_INTAKE_URL: ${THERAPEUTIC_INTAKE_URL:-}
+      THERAPEUTIC_INTAKE_TOKEN: ${THERAPEUTIC_INTAKE_TOKEN:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    restart: on-failure
+
+volumes:
+  pgdata:

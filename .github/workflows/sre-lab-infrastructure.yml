@@ -1,0 +1,96 @@
+name: SRE lab infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Terraform operation
+        type: choice
+        required: true
+        options: [plan, apply]
+        default: plan
+      stack:
+        description: Stack to process
+        type: choice
+        required: true
+        options: [foundation, cluster, all]
+        default: all
+      confirmation:
+        description: Type APPLY_ISOLATED_SRE_LAB for apply
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sre-lab-infrastructure
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: sre-lab
+    env:
+      AWS_REGION: eu-west-2
+      SRE_LAB_ACCOUNT_ID: ${{ vars.SRE_LAB_ACCOUNT_ID }}
+      TF_VAR_aws_account_id: ${{ vars.SRE_LAB_ACCOUNT_ID }}
+      TF_VAR_foundation_state_bucket: ${{ vars.SRE_LAB_STATE_BUCKET }}
+      TF_VAR_terraform_lock_table: ${{ vars.SRE_LAB_LOCK_TABLE }}
+      TF_VAR_operator_cidrs: ${{ vars.SRE_LAB_OPERATOR_CIDRS_JSON }}
+      TF_VAR_alert_email: ${{ vars.SRE_LAB_ALERT_EMAIL }}
+      TF_VAR_budget_alert_email: ${{ vars.SRE_LAB_ALERT_EMAIL }}
+      TF_VAR_expires_after: ${{ vars.SRE_LAB_EXPIRES_AFTER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-sre-lab-infrastructure
+      - name: Verify dedicated account and request
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/sre-lab/check-account.sh
+          if [[ '${{ inputs.operation }}' == 'apply' && '${{ inputs.confirmation }}' != 'APPLY_ISOLATED_SRE_LAB' ]]; then
+            echo 'Apply requires confirmation APPLY_ISOLATED_SRE_LAB.' >&2
+            exit 64
+          fi
+      - name: Prepare backend files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for stack in foundation cluster; do
+            backend_file="$RUNNER_TEMP/${stack}.backend.hcl"
+            {
+              echo "bucket = \"${{ vars.SRE_LAB_STATE_BUCKET }}\""
+              echo "key = \"mycaresignals/sre-lab/${stack}/terraform.tfstate\""
+              echo "region = \"${AWS_REGION}\""
+              echo "dynamodb_table = \"${{ vars.SRE_LAB_LOCK_TABLE }}\""
+              echo 'encrypt = true'
+            } >"$backend_file"
+          done
+      - name: Plan or apply selected stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected='${{ inputs.stack }}'
+          operation='${{ inputs.operation }}'
+          for stack in foundation cluster; do
+            if [[ "$selected" != 'all' && "$selected" != "$stack" ]]; then
+              continue
+            fi
+            stack_dir="infrastructure/envs/mycaresignals/sre-lab/${stack}"
+            terraform -chdir="$stack_dir" init -input=false -backend-config="$RUNNER_TEMP/${stack}.backend.hcl"
+            terraform -chdir="$stack_dir" validate
+            terraform -chdir="$stack_dir" plan -input=false -lock-timeout=5m -out="$RUNNER_TEMP/${stack}.tfplan"
+            if [[ "$operation" == 'apply' ]]; then
+              terraform -chdir="$stack_dir" apply -input=false -lock-timeout=5m "$RUNNER_TEMP/${stack}.tfplan"
+            fi
+          done

@@ -1,0 +1,40 @@
+terraform:validate:
+  stage: validate
+  image:
+    name: hashicorp/terraform:1.9.8
+    entrypoint: [""]
+  variables:
+    TF_IN_AUTOMATION: "true"
+    TF_INPUT: "0"
+    TF_PLUGIN_CACHE_DIR: "$CI_PROJECT_DIR/.cache/terraform/plugins"
+  cache:
+    key: "terraform-plugins"
+    paths:
+      - .cache/terraform/plugins/
+  before_script:
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+  script:
+    - terraform fmt -check -recursive infrastructure/envs/mycaresignals/demo
+    - terraform fmt -check -recursive infrastructure/envs/mycaresignals/prod
+    - terraform fmt -check -recursive infrastructure/envs/mycaresignals/sre-lab
+    - |
+      set -eu
+      stacks="
+      infrastructure/envs/mycaresignals/demo/foundation
+      infrastructure/envs/mycaresignals/demo/services/auth
+      infrastructure/envs/mycaresignals/demo/services/certs
+      infrastructure/envs/mycaresignals/demo/services/teapi
+      infrastructure/envs/mycaresignals/demo/services/tefe
+      infrastructure/envs/mycaresignals/prod/foundation
+      infrastructure/envs/mycaresignals/prod/services/auth
+      infrastructure/envs/mycaresignals/prod/services/teapi
+      infrastructure/envs/mycaresignals/prod/services/tefe
+      infrastructure/envs/mycaresignals/prod/services/qrfeedback
+      infrastructure/envs/mycaresignals/sre-lab/bootstrap
+      infrastructure/envs/mycaresignals/sre-lab/foundation
+      "
+      for stack in $stacks; do
+        echo "Validating ${stack}"
+        terraform -chdir="$stack" init -backend=false -input=false -no-color
+        terraform -chdir="$stack" validate -no-color
+      done
