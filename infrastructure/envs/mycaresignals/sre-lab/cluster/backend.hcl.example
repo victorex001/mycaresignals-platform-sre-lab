@@ -3,3 +3,4 @@ key            = "mycaresignals/sre-lab/cluster/terraform.tfstate"
 region         = "eu-west-2"
 dynamodb_table = "replace-with-sre-lab-lock-table"
 encrypt        = true
+allowed_account_ids = ["266877689034"]

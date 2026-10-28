@@ -1,11 +1,12 @@
-aws_account_id        = "123456789012"
+aws_account_id        = "266877689034"
 foundation_state_bucket = "replace-with-sre-lab-state-bucket"
 terraform_lock_table  = "replace-with-sre-lab-lock-table"
 operator_cidrs        = ["203.0.113.10/32"]
 alert_email           = "sre-lab-alerts@example.invalid"
-expires_after         = "2026-12-31"
+expires_after         = "REPLACE-WITH-EXERCISE-DATE"
 
-# The load node group starts at zero and is scaled only by the guarded run script.
-load_max_nodes        = 20
-rds_multi_az          = true
-rds_instance_class    = "db.m7g.large"
+# Lean first exercise: system 1/1/1, application 1/1/2, Spot load 0/0/1.
+# Do not increase capacity or enable Multi-AZ without a fresh cost review.
+load_max_nodes     = 1
+rds_multi_az       = false
+rds_instance_class = "db.t4g.medium"

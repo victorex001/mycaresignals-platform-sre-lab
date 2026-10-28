@@ -12,6 +12,16 @@ app_node_group="${SRE_LAB_APP_NODE_GROUP:-application-on-demand}"
 cluster_name="${SRE_LAB_CLUSTER_NAME:-mycaresignals-sre-lab-eks}"
 region="${AWS_REGION:-eu-west-2}"
 
+# First-exercise profiles are bounded independently of workflow inputs.
+case "$profile" in
+  smoke) shards=1; load_nodes=1; app_nodes=1; deadline=900 ;;
+  baseline) shards=1; load_nodes=1; app_nodes=1; deadline=1500 ;;
+  *)
+    echo "The USD 50 first exercise permits only smoke and baseline profiles." >&2
+    exit 64
+    ;;
+esac
+
 require_image_digest "$loadgen_image" LOADGEN_IMAGE_URI
 require_exact_confirmation "${CONFIRM_SRE_LAB_RUN:-}" "RUN_SYNTHETIC_ONLY" CONFIRM_SRE_LAB_RUN
 verify_sre_lab_account "$repo_root"
@@ -30,48 +40,27 @@ if [[ -n "$previous_job" ]] && kubectl -n mycaresignals-load get "job/${previous
   fi
 fi
 
-case "$profile" in
-  smoke)
-    shards=2
-    load_nodes=2
-    app_nodes=2
-    deadline=900
-    ;;
-  baseline)
-    shards=4
-    load_nodes=3
-    app_nodes=2
-    deadline=2400
-    ;;
-  scale)
-    shards=12
-    load_nodes=8
-    app_nodes=4
-    deadline=9000
-    ;;
-  soak)
-    require_exact_confirmation "${CONFIRM_SRE_LAB_SOAK:-}" "RUN_8_HOUR_10K_SOAK" CONFIRM_SRE_LAB_SOAK
-    shards=20
-    load_nodes=12
-    app_nodes=6
-    deadline=30600
-    ;;
-  *)
-    echo "Profile must be smoke, baseline, scale, or soak." >&2
-    exit 64
-    ;;
-esac
+for group in "$load_node_group" "$app_node_group"; do
+  maximum="$(aws eks describe-nodegroup --region "$region" --cluster-name "$cluster_name" \
+    --nodegroup-name "$group" --query 'nodegroup.scalingConfig.maxSize' --output text)"
+  limit=2
+  [[ "$group" != "$load_node_group" ]] || limit=1
+  if [[ ! "$maximum" =~ ^[0-9]+$ ]] || (( maximum > limit )); then
+    echo "Node group exceeds the reviewed first-exercise capacity. Apply the lean Terraform plan first." >&2
+    exit 65
+  fi
+done
 
 aws eks update-nodegroup-config \
   --region "$region" \
   --cluster-name "$cluster_name" \
   --nodegroup-name "$load_node_group" \
-  --scaling-config "minSize=0,maxSize=20,desiredSize=${load_nodes}" >/dev/null
+  --scaling-config "desiredSize=${load_nodes}" >/dev/null
 aws eks update-nodegroup-config \
   --region "$region" \
   --cluster-name "$cluster_name" \
   --nodegroup-name "$app_node_group" \
-  --scaling-config "minSize=2,maxSize=10,desiredSize=${app_nodes}" >/dev/null
+  --scaling-config "desiredSize=${app_nodes}" >/dev/null
 
 kubectl -n mycaresignals-sre-lab rollout status deployment/teapi --timeout=15m
 kubectl -n mycaresignals-sre-lab get hpa teapi

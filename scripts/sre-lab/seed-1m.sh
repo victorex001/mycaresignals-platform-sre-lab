@@ -17,8 +17,8 @@ verify_sre_lab_cluster
 user_count="${SRE_LAB_USER_COUNT:-1000000}"
 home_count="${SRE_LAB_HOME_COUNT:-10000}"
 active_children="${SRE_LAB_ACTIVE_CHILDREN_PER_HOME:-4}"
-historical_children="${SRE_LAB_HISTORICAL_CHILDREN_PER_HOME:-13}"
-audit_events="${SRE_LAB_AUDIT_EVENT_COUNT:-10000000}"
+historical_children="${SRE_LAB_HISTORICAL_CHILDREN_PER_HOME:-0}"
+audit_events="${SRE_LAB_AUDIT_EVENT_COUNT:-100000}"
 
 for value in "$user_count" "$home_count" "$active_children" "$historical_children" "$audit_events"; do
   if [[ ! "$value" =~ ^[0-9]+$ ]]; then

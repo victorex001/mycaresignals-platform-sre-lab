@@ -2,6 +2,41 @@ resource "aws_kms_key" "data" {
   description             = "myCareSignals SRE lab EKS secrets, RDS and result encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 7
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AccountAdministration"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "EncryptLabAlarmNotifications"
+        Effect    = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action    = ["kms:Decrypt", "kms:GenerateDataKey*"]
+        Resource  = "*"
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.aws_account_id }
+          ArnLike      = { "aws:SourceArn" = "arn:aws:cloudwatch:${var.aws_region}:${var.aws_account_id}:alarm:${local.name_prefix}-*" }
+        }
+      },
+      {
+        Sid       = "EncryptLabControlPlaneLogs"
+        Effect    = "Allow"
+        Principal = { Service = "logs.${var.aws_region}.amazonaws.com" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource  = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/eks/${local.cluster_name}/cluster"
+          }
+        }
+      }
+    ]
+  })
 
   tags = { Name = "${local.name_prefix}-data" }
 }
@@ -98,13 +133,14 @@ resource "aws_eks_node_group" "system" {
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = data.terraform_remote_state.foundation.outputs.private_subnet_ids
   instance_types  = var.system_instance_types
+  disk_size       = 20
   capacity_type   = "ON_DEMAND"
   ami_type        = "AL2023_x86_64_STANDARD"
 
   scaling_config {
-    min_size     = 2
-    desired_size = 2
-    max_size     = 4
+    min_size     = 1
+    desired_size = 1
+    max_size     = 1
   }
 
   update_config {
@@ -125,13 +161,14 @@ resource "aws_eks_node_group" "application" {
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = data.terraform_remote_state.foundation.outputs.private_subnet_ids
   instance_types  = var.application_instance_types
+  disk_size       = 20
   capacity_type   = "ON_DEMAND"
   ami_type        = "AL2023_x86_64_STANDARD"
 
   scaling_config {
-    min_size     = 2
-    desired_size = 2
-    max_size     = 10
+    min_size     = 1
+    desired_size = 1
+    max_size     = 2
   }
 
   update_config {
@@ -156,6 +193,7 @@ resource "aws_eks_node_group" "load" {
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = data.terraform_remote_state.foundation.outputs.private_subnet_ids
   instance_types  = var.load_instance_types
+  disk_size       = 20
   capacity_type   = "SPOT"
   ami_type        = "AL2023_x86_64_STANDARD"
 

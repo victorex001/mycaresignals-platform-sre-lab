@@ -29,3 +29,16 @@ apps/mycaresignals/feedback/feedback_test.csv
 # Local archives and generated evidence
 *.zip
 load-results/
+
+# Terraform local working files and sensitive plans/state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+**/terraform.tfvars
+**/backend.hcl
+crash.log
+
+# Python verification caches
+**/__pycache__/
+*.pyc

@@ -25,10 +25,13 @@ expect_success() {
   passed=$((passed + 1))
 }
 
-expect_failure env -u SRE_LAB_ACCOUNT_ID FAKE_AWS_ACCOUNT=123456789012 "$check_script"
-expect_failure env SRE_LAB_ACCOUNT_ID=121638211660 FAKE_AWS_ACCOUNT=123456789012 "$check_script"
-expect_failure env SRE_LAB_ACCOUNT_ID=123456789012 FAKE_AWS_ACCOUNT=121638211660 "$check_script"
-expect_failure env SRE_LAB_ACCOUNT_ID=123456789012 FAKE_AWS_ACCOUNT=210987654321 "$check_script"
-expect_success env SRE_LAB_ACCOUNT_ID=123456789012 FAKE_AWS_ACCOUNT=123456789012 "$check_script"
+expect_failure env -u SRE_LAB_ACCOUNT_ID FAKE_AWS_ACCOUNT=266877689034 "$check_script"
+expect_failure env SRE_LAB_ACCOUNT_ID=121638211660 FAKE_AWS_ACCOUNT=266877689034 "$check_script"
+expect_failure env SRE_LAB_ACCOUNT_ID=266877689034 FAKE_AWS_ACCOUNT=121638211660 "$check_script"
+expect_failure env SRE_LAB_ACCOUNT_ID=266877689034 FAKE_AWS_ACCOUNT=210987654321 "$check_script"
+expect_success env SRE_LAB_ACCOUNT_ID=266877689034 FAKE_AWS_ACCOUNT=266877689034 "$check_script"
 
-echo "SRE lab account guard tests passed: ${passed}/5."
+expect_failure env SRE_LAB_ACCOUNT_ID=210987654321 FAKE_AWS_ACCOUNT=210987654321 "$check_script"
+expect_failure env AWS_REGION=us-east-1 SRE_LAB_ACCOUNT_ID=266877689034 FAKE_AWS_ACCOUNT=266877689034 "$check_script"
+expect_failure env SRE_LAB_ACCOUNT_ID=266877689034 FAKE_AWS_ACCOUNT=not-an-account "$check_script"
+echo "SRE lab account guard tests passed: ${passed}/8."

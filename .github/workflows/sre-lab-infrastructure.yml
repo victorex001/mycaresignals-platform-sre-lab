@@ -7,7 +7,7 @@ on:
         description: Terraform operation
         type: choice
         required: true
-        options: [plan, apply]
+        options: [plan, apply, destroy-plan, destroy]
         default: plan
       stack:
         description: Stack to process
@@ -16,7 +16,7 @@ on:
         options: [foundation, cluster, all]
         default: all
       confirmation:
-        description: Type APPLY_ISOLATED_SRE_LAB for apply
+        description: LAUNCH_WITH_4H_AUTOMATIC_TEARDOWN for apply; DESTROY_ISOLATED_SRE_LAB for destroy
         type: string
         required: false
 
@@ -30,12 +30,18 @@ concurrency:
 
 jobs:
   terraform:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: sre-lab
     env:
       AWS_REGION: eu-west-2
+      REQUESTED_OPERATION: ${{ inputs.operation }}
+      REQUESTED_STACK: ${{ inputs.stack }}
+      REQUESTED_CONFIRMATION: ${{ inputs.confirmation }}
+      TF_VAR_monthly_budget_usd: '50'
       SRE_LAB_ACCOUNT_ID: ${{ vars.SRE_LAB_ACCOUNT_ID }}
+      SRE_LAB_AWS_ROLE_ARN: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}
       TF_VAR_aws_account_id: ${{ vars.SRE_LAB_ACCOUNT_ID }}
       TF_VAR_foundation_state_bucket: ${{ vars.SRE_LAB_STATE_BUCKET }}
       TF_VAR_terraform_lock_table: ${{ vars.SRE_LAB_LOCK_TABLE }}
@@ -48,20 +54,44 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
+      - name: Verify live human approval settings
+        run: python3 scripts/sre-lab/check-github-approval.py
+      - name: Verify declared AWS target before OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$SRE_LAB_ACCOUNT_ID" != '266877689034' || "$SRE_LAB_AWS_ROLE_ARN" != 'arn:aws:iam::266877689034:role/mycaresignals-sre-lab-github-actions' ]]; then
+            echo 'Refusing a missing or foreign AWS account/role configuration.' >&2
+            exit 65
+          fi
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.SRE_LAB_AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-sre-lab-infrastructure
+          role-duration-seconds: 7200
       - name: Verify dedicated account and request
         shell: bash
         run: |
           set -euo pipefail
           ./scripts/sre-lab/check-account.sh
-          if [[ '${{ inputs.operation }}' == 'apply' && '${{ inputs.confirmation }}' != 'APPLY_ISOLATED_SRE_LAB' ]]; then
-            echo 'Apply requires confirmation APPLY_ISOLATED_SRE_LAB.' >&2
+          if [[ "$REQUESTED_OPERATION" == apply && "$REQUESTED_CONFIRMATION" != LAUNCH_WITH_4H_AUTOMATIC_TEARDOWN ]]; then
+            echo 'Apply requires confirmation LAUNCH_WITH_4H_AUTOMATIC_TEARDOWN.' >&2
             exit 64
           fi
+          if [[ "$REQUESTED_OPERATION" == destroy && "$REQUESTED_CONFIRMATION" != DESTROY_ISOLATED_SRE_LAB ]]; then
+            echo 'Destroy requires confirmation DESTROY_ISOLATED_SRE_LAB.' >&2
+            exit 64
+          fi
+          if [[ "$REQUESTED_OPERATION" == destroy* && "$REQUESTED_STACK" != all ]]; then
+            echo 'Teardown must select all: cluster is destroyed before foundation.' >&2
+            exit 64
+          fi
+      - name: Arm or verify durable four-hour automatic teardown
+        if: inputs.operation == 'apply'
+        env:
+          CONFIRM_SRE_LAB_LAUNCH: ${{ inputs.confirmation }}
+        run: python3 scripts/sre-lab/arm-teardown.py --arm --output "$RUNNER_TEMP/teardown-source.zip"
       - name: Prepare backend files
         shell: bash
         run: |
@@ -74,23 +104,36 @@ jobs:
               echo "region = \"${AWS_REGION}\""
               echo "dynamodb_table = \"${{ vars.SRE_LAB_LOCK_TABLE }}\""
               echo 'encrypt = true'
+              echo 'allowed_account_ids = ["266877689034"]'
             } >"$backend_file"
           done
       - name: Plan or apply selected stacks
         shell: bash
         run: |
           set -euo pipefail
-          selected='${{ inputs.stack }}'
-          operation='${{ inputs.operation }}'
-          for stack in foundation cluster; do
+          selected="$REQUESTED_STACK"
+          operation="$REQUESTED_OPERATION"
+          stacks=(foundation cluster)
+          plan_flags=(-input=false)
+          if [[ "$operation" == destroy* ]]; then
+            stacks=(cluster foundation)
+            plan_flags=(-destroy -input=false)
+          fi
+          for stack in "${stacks[@]}"; do
             if [[ "$selected" != 'all' && "$selected" != "$stack" ]]; then
               continue
             fi
             stack_dir="infrastructure/envs/mycaresignals/sre-lab/${stack}"
+            if [[ "$operation" == apply ]]; then
+              python3 scripts/sre-lab/check-teardown-timer.py
+            fi
             terraform -chdir="$stack_dir" init -input=false -backend-config="$RUNNER_TEMP/${stack}.backend.hcl"
             terraform -chdir="$stack_dir" validate
-            terraform -chdir="$stack_dir" plan -input=false -lock-timeout=5m -out="$RUNNER_TEMP/${stack}.tfplan"
-            if [[ "$operation" == 'apply' ]]; then
+            terraform -chdir="$stack_dir" plan "${plan_flags[@]}" -lock-timeout=5m -out="$RUNNER_TEMP/${stack}.tfplan"
+            if [[ "$operation" == apply || "$operation" == destroy ]]; then
+              if [[ "$operation" == apply ]]; then
+                python3 scripts/sre-lab/check-teardown-timer.py
+              fi
               terraform -chdir="$stack_dir" apply -input=false -lock-timeout=5m "$RUNNER_TEMP/${stack}.tfplan"
             fi
           done

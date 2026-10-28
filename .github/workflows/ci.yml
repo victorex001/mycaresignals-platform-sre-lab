@@ -23,6 +23,9 @@ jobs:
           set -euo pipefail
           find scripts/sre-lab scripts/ci -type f -name '*.sh' -print0 | xargs -0 bash -n
           ./scripts/sre-lab/tests/check_account_test.sh
+          python3 scripts/sre-lab/tests/teardown_test.py
+          python3 scripts/ci/tests/repository_safety_test.py
+          python3 scripts/sre-lab/estimate-cost.py
           ./scripts/ci/check_repository_safety.sh
           ./scripts/ci/check_migration_contract.sh
           ./scripts/ci/check_observability_contract.sh
@@ -79,13 +82,23 @@ jobs:
 
   load-script:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        profile: [smoke, baseline]
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect k6 scenario
+      - name: Inspect k6 scenario and enforce concurrency limit
+        env:
+          PROFILE: ${{ matrix.profile }}
         run: |
+          set -euo pipefail
           docker run --rm \
             -e BASE_URL=http://example.invalid \
             -e DEV_JWT_HMAC_SECRET=0000000000000000000000000000000000000000000000000000000000000000 \
-            -e PROFILE=smoke \
+            -e PROFILE="$PROFILE" \
             -v "$PWD/load-testing/mycaresignals-1m/k6:/scripts:ro" \
-            grafana/k6:0.54.0 inspect --include-system-env-vars /scripts/scenario.js
+            grafana/k6:0.54.0 inspect --include-system-env-vars /scripts/scenario.js > /tmp/k6-options.json
+          peak=10
+          if [[ "$PROFILE" == baseline ]]; then peak=100; fi
+          jq -e --argjson peak "$peak" \
+            '([.scenarios.staff_journeys.stages[].target] | max) == $peak' /tmp/k6-options.json

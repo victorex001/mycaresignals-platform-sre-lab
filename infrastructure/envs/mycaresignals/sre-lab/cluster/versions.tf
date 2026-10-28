@@ -33,11 +33,12 @@ data "aws_caller_identity" "current" {}
 data "terraform_remote_state" "foundation" {
   backend = "s3"
   config = {
-    bucket         = var.foundation_state_bucket
-    key            = var.foundation_state_key
-    region         = var.aws_region
-    dynamodb_table = var.terraform_lock_table
-    encrypt        = true
+    bucket              = var.foundation_state_bucket
+    key                 = var.foundation_state_key
+    region              = var.aws_region
+    dynamodb_table      = var.terraform_lock_table
+    encrypt             = true
+    allowed_account_ids = [var.aws_account_id]
   }
 }
 

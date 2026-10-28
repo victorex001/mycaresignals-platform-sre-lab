@@ -14,7 +14,7 @@ metadata:
     app.kubernetes.io/name: teapi
     app.kubernetes.io/part-of: mycaresignals
 spec:
-  replicas: 4
+  replicas: 2
   revisionHistoryLimit: 5
   strategy:
     type: RollingUpdate
@@ -126,7 +126,7 @@ metadata:
   name: teapi
   namespace: mycaresignals-sre-lab
 spec:
-  minAvailable: 75%
+  minAvailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: teapi
@@ -141,8 +141,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: teapi
-  minReplicas: 4
-  maxReplicas: 30
+  minReplicas: 2
+  maxReplicas: 3
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 0
