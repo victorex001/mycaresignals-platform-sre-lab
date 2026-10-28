@@ -6,8 +6,8 @@ cd "$repo_root"
 
 latest_version() {
   local directory="$1"
-  find "$directory" -maxdepth 1 -type f -name '*.up.sql' -printf '%f\n' |
-    sed -E 's/^0*([0-9]+)_.*/\1/' |
+  find "$directory" -maxdepth 1 -type f -name '*.up.sql' -print |
+    sed -E 's|.*/||; s/^0*([0-9]+)_.*/\1/' |
     sort -n |
     tail -n 1
 }

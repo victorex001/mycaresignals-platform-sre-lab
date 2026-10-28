@@ -3,8 +3,8 @@ variable "aws_account_id" {
   description = "Twelve-digit ID of the dedicated SRE lab AWS account. No default is permitted."
 
   validation {
-    condition     = can(regex("^[0-9]{12}$", var.aws_account_id))
-    error_message = "aws_account_id must be a 12-digit AWS account ID."
+    condition     = var.aws_account_id == "266877689034"
+    error_message = "This exercise is restricted to AWS account 266877689034."
   }
 }
 
@@ -12,11 +12,21 @@ variable "production_account_id" {
   type        = string
   description = "Known production account denied by the lab guardrail."
   default     = "121638211660"
+
+  validation {
+    condition     = var.production_account_id == "121638211660"
+    error_message = "The production account exclusion cannot be changed."
+  }
 }
 
 variable "aws_region" {
   type    = string
   default = "eu-west-2"
+
+  validation {
+    condition     = var.aws_region == "eu-west-2"
+    error_message = "This exercise is restricted to eu-west-2."
+  }
 }
 
 variable "project_name" {
@@ -64,16 +74,16 @@ variable "enable_vpc_flow_logs" {
 
 variable "log_retention_days" {
   type    = number
-  default = 14
+  default = 3
 }
 
 variable "monthly_budget_usd" {
   type    = number
-  default = 200
+  default = 50
 
   validation {
-    condition     = var.monthly_budget_usd > 0
-    error_message = "monthly_budget_usd must be positive."
+    condition     = var.monthly_budget_usd > 0 && var.monthly_budget_usd <= 50
+    error_message = "The first exercise budget must be positive and no more than USD 50."
   }
 }
 

@@ -109,7 +109,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# A single lab NAT gateway keeps the eight-hour exercise lean. It is deliberately
+# One lab NAT gateway lasts until the four-hour expiry and bounded cleanup. It is
 # not presented as a production high-availability pattern.
 resource "aws_eip" "nat" {
   count  = var.enable_nat_gateway ? 1 : 0
@@ -215,10 +215,8 @@ resource "aws_budgets_budget" "monthly" {
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
-  cost_filter {
-    name   = "TagKeyValue"
-    values = ["user:Environment$sre-lab"]
-  }
+  # Include all costs in this dedicated account. Tag activation and untagged
+  # charges must not make the alert undercount the first exercise.
 
   notification {
     comparison_operator        = "GREATER_THAN"

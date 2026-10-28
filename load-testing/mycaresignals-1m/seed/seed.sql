@@ -27,11 +27,11 @@ SELECT :'confirmation' = 'SRE_LAB_SYNTHETIC_ONLY' AS confirmation_valid \gset
 \endif
 \if :{?historical_children_per_home}
 \else
-  \set historical_children_per_home 13
+  \set historical_children_per_home 0
 \endif
 \if :{?audit_event_count}
 \else
-  \set audit_event_count 10000000
+  \set audit_event_count 100000
 \endif
 
 SELECT

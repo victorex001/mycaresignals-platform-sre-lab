@@ -41,13 +41,13 @@ the only step that needs a locally authenticated AWS session.
 
 ```bash
 cp foundation/terraform.tfvars.example foundation/terraform.tfvars
-export SRE_LAB_ACCOUNT_ID=123456789012
+export SRE_LAB_ACCOUNT_ID=266877689034
 ./scripts/sre-lab/plan-foundation.sh
 ```
 
 The GitHub infrastructure workflow can plan or apply. Every AWS operation uses
 the protected `sre-lab` Environment; apply additionally requires the exact
-confirmation `APPLY_ISOLATED_SRE_LAB`. Configure a required human reviewer
+confirmation `LAUNCH_WITH_4H_AUTOMATIC_TEARDOWN`. Configure a required human reviewer
 before the first run.
 
 ## Exit criteria before the first drill
@@ -61,3 +61,16 @@ before the first run.
 
 See [`docs/sre/github-aws-lab.md`](../../../../docs/sre/github-aws-lab.md) for
 the complete GitHub controls and reviewed execution order.
+
+## First exercise review
+
+The target is `266877689034`, region `eu-west-2`, with a total USD 50 allowance.
+See [the first-exercise plan](../../../../docs/sre/first-exercise-plan.md) for
+cost assumptions, open checks and the independent four-hour AWS teardown timer. Examples use
+an invalid expiry placeholder deliberately: choose the actual exercise date
+when approving the window. An expiry tag does not delete resources.
+
+The launch approval authorises automatic expiry. Persistent controls in
+`bootstrap/teardown.tf` must exist and their failure email must be confirmed
+before a launch can arm its timer. See
+[automatic teardown](../../../../docs/sre/automatic-teardown.md).

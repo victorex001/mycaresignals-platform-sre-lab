@@ -7,7 +7,7 @@ on:
         description: Reviewed phase to execute
         type: choice
         required: true
-        options: [deploy, seed, smoke, baseline, scale, soak, status, collect-stop, stop, fault-pod, fault-rds]
+        options: [deploy, seed, smoke, baseline, status, collect-stop, stop, fault-pod]
         default: smoke
       confirmation:
         description: Confirmation text shown in the runbook for this phase
@@ -24,24 +24,40 @@ concurrency:
 
 jobs:
   exercise:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     environment: sre-lab
     env:
       AWS_REGION: eu-west-2
+      REQUESTED_PHASE: ${{ inputs.phase }}
+      REQUESTED_CONFIRMATION: ${{ inputs.confirmation }}
       SRE_LAB_ACCOUNT_ID: ${{ vars.SRE_LAB_ACCOUNT_ID }}
+      SRE_LAB_AWS_ROLE_ARN: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}
       SRE_LAB_CLUSTER_NAME: mycaresignals-sre-lab-eks
       SRE_LAB_LOAD_NODE_GROUP: load-generator-spot
       SRE_LAB_APP_NODE_GROUP: application-on-demand
     steps:
       - uses: actions/checkout@v4
+      - name: Verify live human approval settings
+        run: python3 scripts/sre-lab/check-github-approval.py
+      - name: Verify declared AWS target before OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$SRE_LAB_ACCOUNT_ID" != '266877689034' || "$SRE_LAB_AWS_ROLE_ARN" != 'arn:aws:iam::266877689034:role/mycaresignals-sre-lab-github-actions' ]]; then
+            echo 'Refusing a missing or foreign AWS account/role configuration.' >&2
+            exit 65
+          fi
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.SRE_LAB_AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.SRE_LAB_AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: github-sre-lab-exercise
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.5
       - name: Install Helm
         if: inputs.phase == 'deploy'
         uses: azure/setup-helm@v4
@@ -49,18 +65,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          phase='${{ inputs.phase }}'
-          confirmation='${{ inputs.confirmation }}'
+          phase="$REQUESTED_PHASE"
+          confirmation="$REQUESTED_CONFIRMATION"
           case "$phase" in
             deploy) expected='DEPLOY_SYNTHETIC_LAB' ;;
             seed) expected='SRE_LAB_SYNTHETIC_ONLY' ;;
-            smoke|baseline|scale) expected='RUN_SYNTHETIC_ONLY' ;;
-            soak) expected='RUN_8_HOUR_10K_SOAK' ;;
+            smoke|baseline) expected='RUN_SYNTHETIC_ONLY' ;;
             status) expected='CHECK_SRE_LAB_LOAD' ;;
             collect-stop) expected='COLLECT_AND_STOP_SRE_LAB_LOAD' ;;
             stop) expected='STOP_SRE_LAB_LOAD' ;;
             fault-pod) expected='KILL_ONE_API_POD' ;;
-            fault-rds) expected='FAILOVER_SYNTHETIC_RDS' ;;
             *) exit 64 ;;
           esac
           if [[ "$confirmation" != "$expected" ]]; then
@@ -72,11 +86,11 @@ jobs:
         shell: bash
         run: ./scripts/sre-lab/authorize-github-runner.sh
       - name: Login to ECR
-        if: inputs.phase == 'deploy' || inputs.phase == 'seed' || inputs.phase == 'smoke' || inputs.phase == 'baseline' || inputs.phase == 'scale' || inputs.phase == 'soak'
+        if: inputs.phase == 'deploy' || inputs.phase == 'seed' || inputs.phase == 'smoke' || inputs.phase == 'baseline'
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
       - name: Build and publish required images
-        if: inputs.phase != 'stop' && inputs.phase != 'fault-pod' && inputs.phase != 'fault-rds'
+        if: inputs.phase == 'deploy' || inputs.phase == 'seed' || inputs.phase == 'smoke' || inputs.phase == 'baseline'
         shell: bash
         env:
           PHASE: ${{ inputs.phase }}
@@ -110,7 +124,7 @@ jobs:
             seed)
               push_and_resolve seed-tools load-testing/mycaresignals-1m/Dockerfile.seed load-testing/mycaresignals-1m SEED_IMAGE_URI
               ;;
-            smoke|baseline|scale|soak)
+            smoke|baseline)
               push_and_resolve loadgen load-testing/mycaresignals-1m/Dockerfile load-testing/mycaresignals-1m LOADGEN_IMAGE_URI
               ;;
           esac
@@ -142,15 +156,9 @@ jobs:
               export CONFIRM_SRE_LAB_SEED=SRE_LAB_SYNTHETIC_ONLY
               ./scripts/sre-lab/seed-1m.sh
               ;;
-            smoke|baseline|scale)
+            smoke|baseline)
               export CONFIRM_SRE_LAB_RUN=RUN_SYNTHETIC_ONLY
               ./scripts/sre-lab/run-load.sh "$PHASE"
-              ;;
-            soak)
-              export CONFIRM_SRE_LAB_RUN=RUN_SYNTHETIC_ONLY
-              export CONFIRM_SRE_LAB_SOAK=RUN_8_HOUR_10K_SOAK
-              export SRE_LAB_WAIT_FOR_LOAD=false
-              ./scripts/sre-lab/run-load.sh soak
               ;;
             status)
               ./scripts/sre-lab/load-status.sh
@@ -167,13 +175,9 @@ jobs:
               export CONFIRM_SRE_LAB_FAULT=KILL_ONE_API_POD
               ./scripts/sre-lab/scenario-kill-api-pod.sh
               ;;
-            fault-rds)
-              export CONFIRM_SRE_LAB_FAULT=FAILOVER_SYNTHETIC_RDS
-              ./scripts/sre-lab/scenario-rds-failover.sh
-              ;;
           esac
       - name: Scale load capacity down
-        if: always() && (inputs.phase == 'smoke' || inputs.phase == 'baseline' || inputs.phase == 'scale')
+        if: always() && (inputs.phase == 'smoke' || inputs.phase == 'baseline')
         shell: bash
         run: |
           export CONFIRM_SRE_LAB_STOP=STOP_SRE_LAB_LOAD

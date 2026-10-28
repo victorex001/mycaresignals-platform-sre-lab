@@ -71,8 +71,8 @@ resource "aws_db_instance" "postgres" {
   password = random_password.postgres.result
   port     = 5432
 
-  allocated_storage     = 100
-  max_allocated_storage = 500
+  allocated_storage     = 20
+  max_allocated_storage = 0
   storage_type          = "gp3"
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.data.arn
@@ -82,7 +82,7 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
   vpc_security_group_ids = [aws_security_group.postgres.id]
 
-  backup_retention_period = 7
+  backup_retention_period = 1
   backup_window           = "01:00-02:00"
   maintenance_window      = "sun:02:30-sun:03:30"
 
@@ -97,6 +97,7 @@ resource "aws_db_instance" "postgres" {
   apply_immediately          = true
   deletion_protection        = false
   skip_final_snapshot        = true
+  delete_automated_backups   = true
   copy_tags_to_snapshot      = true
 
   depends_on = [aws_iam_role_policy_attachment.rds_monitoring]

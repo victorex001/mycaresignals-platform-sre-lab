@@ -3,8 +3,8 @@ variable "aws_account_id" {
   description = "Twelve-digit ID of the dedicated SRE lab AWS account. No default is permitted."
 
   validation {
-    condition     = can(regex("^[0-9]{12}$", var.aws_account_id))
-    error_message = "aws_account_id must be a 12-digit AWS account ID."
+    condition     = var.aws_account_id == "266877689034"
+    error_message = "This exercise is restricted to AWS account 266877689034."
   }
 }
 
@@ -12,11 +12,21 @@ variable "production_account_id" {
   type        = string
   description = "Known production account denied by the lab guardrail."
   default     = "121638211660"
+
+  validation {
+    condition     = var.production_account_id == "121638211660"
+    error_message = "The production account exclusion cannot be changed."
+  }
 }
 
 variable "aws_region" {
   type    = string
   default = "eu-west-2"
+
+  validation {
+    condition     = var.aws_region == "eu-west-2"
+    error_message = "This exercise is restricted to eu-west-2."
+  }
 }
 
 variable "project_name" {

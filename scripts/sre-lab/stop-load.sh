@@ -26,11 +26,11 @@ aws eks update-nodegroup-config \
   --region "$region" \
   --cluster-name "$cluster_name" \
   --nodegroup-name "$load_node_group" \
-  --scaling-config "minSize=0,maxSize=20,desiredSize=0" >/dev/null
+  --scaling-config "desiredSize=0" >/dev/null
 aws eks update-nodegroup-config \
   --region "$region" \
   --cluster-name "$cluster_name" \
   --nodegroup-name "$app_node_group" \
-  --scaling-config "minSize=2,maxSize=10,desiredSize=2" >/dev/null
+  --scaling-config "desiredSize=1" >/dev/null
 
-echo "Load jobs stopped; load nodes are scaling to zero and application nodes to two."
+echo "Load jobs stopped; load nodes are scaling to zero and application nodes to one."

@@ -1,0 +1,128 @@
+{
+  "prepared_date": "2026-10-28",
+  "account": "266877689034",
+  "region": "eu-west-2",
+  "currency": "USD",
+  "budget_usd": "50.00",
+  "billed_hours": 8,
+  "setup_and_teardown_included": true,
+  "free_tier_or_credits_assumed": false,
+  "pretax_envelope_usd": "20.00",
+  "tax_allowance_fraction": "0.20",
+  "extra_contingency_usd": "10.00",
+  "items": [
+    {
+      "name": "EKS standard-support control plane",
+      "quantity": "8",
+      "unit_rate_usd": "0.10",
+      "rate_type": "verified"
+    },
+    {
+      "name": "System On-Demand m6i.large",
+      "quantity": "8",
+      "unit_rate_usd": "0.111",
+      "rate_type": "verified"
+    },
+    {
+      "name": "Application On-Demand m6i.large (two nodes)",
+      "quantity": "16",
+      "unit_rate_usd": "0.111",
+      "rate_type": "verified"
+    },
+    {
+      "name": "Spot load node (one, priced at c6i.xlarge On-Demand)",
+      "quantity": "8",
+      "unit_rate_usd": "0.202",
+      "rate_type": "verified-on-demand-rate-used-as-allowance"
+    },
+    {
+      "name": "RDS db.t4g.medium PostgreSQL Single-AZ",
+      "quantity": "8",
+      "unit_rate_usd": "0.072",
+      "rate_type": "verified"
+    },
+    {
+      "name": "NAT gateway hours",
+      "quantity": "8",
+      "unit_rate_usd": "0.06",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "One NAT public IPv4",
+      "quantity": "8",
+      "unit_rate_usd": "0.005",
+      "rate_type": "verified"
+    },
+    {
+      "name": "NAT processing, 10 GB",
+      "quantity": "10",
+      "unit_rate_usd": "0.06",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "EBS 80 GiB and RDS 20 GiB storage, eight hours",
+      "quantity": "1",
+      "unit_rate_usd": "0.18",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "Logs, 5 GB including control/build logs",
+      "quantity": "5",
+      "unit_rate_usd": "0.80",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "Container Insights, metrics, dashboard, alarms including one month of safety alarms",
+      "quantity": "1",
+      "unit_rate_usd": "2.50",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "CodeBuild, three attempts of up to 40 minutes",
+      "quantity": "120",
+      "unit_rate_usd": "0.01",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "Step Functions Standard transitions",
+      "quantity": "1",
+      "unit_rate_usd": "0.01",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "SNS notifications",
+      "quantity": "1",
+      "unit_rate_usd": "0.05",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "S3 source/evidence/state, ECR, KMS, secrets, DynamoDB and thirty-day retained controls",
+      "quantity": "1",
+      "unit_rate_usd": "1.00",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "Cross-AZ traffic",
+      "quantity": "1",
+      "unit_rate_usd": "0.50",
+      "rate_type": "allowance"
+    },
+    {
+      "name": "RDS burst CPU credits",
+      "quantity": "1",
+      "unit_rate_usd": "2.00",
+      "rate_type": "allowance"
+    }
+  ],
+  "sources": {
+    "ec2": "https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/EU%20(London)/Linux/index.json",
+    "rds": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/eu-west-2/index.json",
+    "rds_sku": "H6U5RNXSENY7QJ2W",
+    "rds_effective_date": "2026-10-01T00:00:00Z",
+    "eks": "https://aws.amazon.com/eks/pricing/",
+    "networking": "https://aws.amazon.com/vpc/pricing/",
+    "logs": "https://aws.amazon.com/cloudwatch/pricing/",
+    "codebuild": "https://aws.amazon.com/codebuild/pricing/",
+    "timer": "https://aws.amazon.com/step-functions/pricing/"
+  }
+}

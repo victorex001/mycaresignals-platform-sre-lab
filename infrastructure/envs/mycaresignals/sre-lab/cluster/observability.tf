@@ -62,13 +62,13 @@ resource "aws_cloudwatch_metric_alarm" "rds_memory" {
 
 resource "aws_cloudwatch_metric_alarm" "rds_storage" {
   alarm_name          = "${local.name_prefix}-rds-free-storage-low"
-  alarm_description   = "PostgreSQL free storage is below 20 GiB."
+  alarm_description   = "PostgreSQL free storage is below 5 GiB."
   namespace           = "AWS/RDS"
   metric_name         = "FreeStorageSpace"
   statistic           = "Average"
   period              = 300
   evaluation_periods  = 2
-  threshold           = 21474836480
+  threshold           = 5368709120
   comparison_operator = "LessThanThreshold"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.operations.arn]
@@ -111,6 +111,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "results" {
   rule {
     id     = "expire-lab-evidence"
     status = "Enabled"
+    filter {}
 
     expiration {
       days = 30

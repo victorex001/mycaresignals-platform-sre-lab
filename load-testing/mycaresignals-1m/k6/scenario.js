@@ -18,38 +18,21 @@ const homeCount = Number(__ENV.HOME_COUNT || '10000');
 if (!baseURL || jwtSecret.length < 32) {
   throw new Error('BASE_URL and a DEV_JWT_HMAC_SECRET of at least 32 characters are required');
 }
+if (shardCount !== 1 || shardIndex !== 0) {
+  throw new Error('The USD 50 first exercise requires one shard with index zero');
+}
 
-const totalTargets = {
-  smoke: 50,
-  baseline: 500,
-  scale: 5000,
-  soak: 10000,
-};
-
+// Dataset size and concurrency are separate controls. Larger runs need a new review.
 const stageProfiles = {
   smoke: [
-    { duration: '1m', target: totalTargets.smoke },
-    { duration: '3m', target: totalTargets.smoke },
+    { duration: '1m', target: 10 },
+    { duration: '3m', target: 10 },
     { duration: '1m', target: 0 },
   ],
   baseline: [
-    { duration: '5m', target: totalTargets.baseline },
-    { duration: '20m', target: totalTargets.baseline },
-    { duration: '5m', target: 0 },
-  ],
-  scale: [
-    { duration: '10m', target: 1000 },
-    { duration: '20m', target: 1000 },
-    { duration: '15m', target: 2500 },
-    { duration: '30m', target: 2500 },
-    { duration: '15m', target: totalTargets.scale },
-    { duration: '20m', target: totalTargets.scale },
-    { duration: '10m', target: 0 },
-  ],
-  soak: [
-    { duration: '30m', target: totalTargets.soak },
-    { duration: '7h', target: totalTargets.soak },
-    { duration: '30m', target: 0 },
+    { duration: '3m', target: 100 },
+    { duration: '9m', target: 100 },
+    { duration: '3m', target: 0 },
   ],
 };
 
@@ -79,7 +62,7 @@ export const options = {
     business_latency: ['p(95)<500'],
     unexpected_response: ['rate<0.01'],
     audit_write_failed: ['rate<0.01'],
-    tenant_denial_bypass: ['count==0'],
+    tenant_denial_bypass: [{ threshold: 'count==0', abortOnFail: true }],
     checks: ['rate>0.99'],
   },
   discardResponseBodies: true,
