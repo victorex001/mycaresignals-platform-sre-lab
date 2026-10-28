@@ -80,9 +80,10 @@ jobs:
             terraform -chdir="infrastructure/envs/mycaresignals/sre-lab/${stack}" validate
           done
 
-  load-script:
+  load-profile:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         profile: [smoke, baseline]
     steps:
@@ -102,3 +103,15 @@ jobs:
           if [[ "$PROFILE" == baseline ]]; then peak=100; fi
           jq -e --argjson peak "$peak" \
             '([.scenarios.staff_journeys.stages[].target] | max) == $peak' /tmp/k6-options.json
+
+  # Keep this name stable: protected main requires the load-script check.
+  # always() ensures a failed, cancelled or skipped profile cannot skip this gate.
+  load-script:
+    runs-on: ubuntu-latest
+    needs: load-profile
+    if: ${{ always() }}
+    steps:
+      - name: Require both load profiles to pass
+        env:
+          PROFILE_RESULT: ${{ needs.load-profile.result }}
+        run: test "$PROFILE_RESULT" = success

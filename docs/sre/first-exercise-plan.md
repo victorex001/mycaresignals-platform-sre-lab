@@ -65,6 +65,14 @@ two application nodes). Resolve that capacity blocker before launch. The
 Standard Spot quota is **5 vCPUs**, sufficient for the one 4-vCPU load node if
 unused; actual Spot capacity and other account usage still need preflight checks.
 
+The **6-vCPU figure covers ordinary scaling, not managed-node update surge**.
+[EKS's default update strategy](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html)
+can temporarily increase the Auto Scaling group's maximum and desired sizes
+while replacements join. Terraform's normal node-group maxima are therefore
+not a hard ceiling during an upgrade. Version/AMI/node-group upgrades are outside
+this first exercise; review both On-Demand and Spot quota headroom, update
+strategy and incremental costs before scheduling that maintenance.
+
 ## Lean configuration and synthetic exercise
 
 | Component | Reviewed first-exercise setting |
@@ -202,7 +210,11 @@ invalid settings; eight account, 23 offline teardown and six scanner tests;
 workflow linting; portable migration/observability checks; Terraform validation
 of all stacks and the pinned Linux/amd64 cluster source; full current-source
 credential/artifact scan after materializing cloud-offloaded files. CI also
-checks both k6 concurrency peaks. Generated caches, provider binaries, dependency/build
+checks both k6 concurrency peaks. The required `load-script` check is a stable
+gate that succeeds only when both smoke and baseline inspections succeed;
+failure, cancellation or skipped inspections fail the gate. Existing branch
+protection requirements and deployment approvals remain unchanged.
+Generated caches, provider binaries, dependency/build
 outputs and external checkout links are excluded explicitly. No credential
 values were printed and no indexed Git blob was substituted for a current file.
 
