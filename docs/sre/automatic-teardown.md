@@ -98,8 +98,14 @@ SNS topic is deleted. A confirmed email subscriber is a launch prerequisite.
 Notifications carry status information, not runtime secrets. Terraform/AWS output
 is captured rather than streamed; controlled failure categories are logged.
 
-Keep bootstrap/state controls and at most 30 days of source/evidence storage;
-CodeBuild logs retain for three days. Idle CodeBuild and Standard wait time do
+The versioned source/evidence bucket expires current versions after 30 days
+and deletes noncurrent versions after another 30 days. An untouched object can
+therefore remain for roughly 60 days, subject to asynchronous lifecycle
+processing; this is not a strict 30-day data-deletion deadline. The Terraform
+state bucket has no lifecycle expiry, and bootstrap resources remain until
+separately reviewed removal. Review retained storage and ongoing alarm charges
+over that full period. CodeBuild logs retain for three days.
+Idle CodeBuild and Standard wait time do
 not consume worker compute. The cost review includes all three maximum build
 attempts, persistent alarms and retained storage. The disposable foundation's
 Budget is removed with foundation, so review delayed charges and retained
